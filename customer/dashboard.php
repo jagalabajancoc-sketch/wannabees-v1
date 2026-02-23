@@ -547,6 +547,27 @@ $stmt->close();
             </div>
             <div class="modal-body">
                 <div class="extend-options" id="extendOptions"></div>
+                <div id="extendPaymentSection" style="display:none;margin-top:15px;">
+                    <label style="font-size:14px;font-weight:600;display:block;margin-bottom:10px;"><i class="fas fa-credit-card"></i> Payment Method</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                        <div id="extendPayGcashBtn" class="extend-option" onclick="selectExtendPayment('GCASH')" style="padding:12px;text-align:center;">
+                            <div><i class="fas fa-mobile-alt" style="font-size:20px;"></i></div>
+                            <div style="font-weight:600;margin-top:4px;">GCash</div>
+                        </div>
+                        <div id="extendPayCashBtn" class="extend-option" onclick="selectExtendPayment('CASH')" style="padding:12px;text-align:center;">
+                            <div><i class="fas fa-money-bill-wave" style="font-size:20px;"></i></div>
+                            <div style="font-weight:600;margin-top:4px;">Cash</div>
+                        </div>
+                    </div>
+                    <div id="extendGcashFields" style="display:none;">
+                        <input type="text" id="extendGcashAccountName" placeholder="GCash Account Name" style="width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;margin-bottom:8px;">
+                        <input type="text" id="extendGcashRefNumber" placeholder="GCash Reference Number" style="width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+                    </div>
+                    <div id="extendCashInfo" style="display:none;background:#d1ecf1;border:1px solid #bee5eb;border-radius:8px;padding:10px;font-size:13px;color:#0c5460;">
+                        <i class="fas fa-info-circle"></i> Staff will come to your room to collect payment.
+                    </div>
+                    <div id="extendPaymentError" style="color:#e74c3c;font-size:13px;margin-top:6px;display:none;"></div>
+                </div>
             </div>
             <div class="modal-actions">
                 <button class="modal-btn btn-cancel" onclick="closeExtendModal()">Cancel</button>
@@ -569,10 +590,25 @@ $stmt->close();
                     <span class="order-total-value">P<span id="orderTotalValue">0.00</span></span>
                 </div>
                 <div style="margin-top:15px;">
-                    <label style="font-size:14px;font-weight:600;display:block;margin-bottom:6px;"><i class="fas fa-money-bill-wave"></i> Amount You Will Pay (₱)</label>
-                    <input type="number" id="amountTendered" min="0" step="0.01" placeholder="Enter amount" style="width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:8px;font-size:16px;">
-                    <div id="changeDisplay" style="margin-top:8px;font-size:14px;display:none;"></div>
-                    <div id="amountError" style="color:#e74c3c;font-size:13px;margin-top:4px;display:none;"></div>
+                    <label style="font-size:14px;font-weight:600;display:block;margin-bottom:10px;"><i class="fas fa-credit-card"></i> Payment Method</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                        <div id="payGcashBtn" class="extend-option" onclick="selectPaymentMethod('GCASH')" style="padding:12px;text-align:center;">
+                            <div><i class="fas fa-mobile-alt" style="font-size:20px;"></i></div>
+                            <div style="font-weight:600;margin-top:4px;">GCash</div>
+                        </div>
+                        <div id="payCashBtn" class="extend-option" onclick="selectPaymentMethod('CASH')" style="padding:12px;text-align:center;">
+                            <div><i class="fas fa-money-bill-wave" style="font-size:20px;"></i></div>
+                            <div style="font-weight:600;margin-top:4px;">Cash</div>
+                        </div>
+                    </div>
+                    <div id="gcashFields" style="display:none;">
+                        <input type="text" id="gcashAccountName" placeholder="GCash Account Name" style="width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;margin-bottom:8px;">
+                        <input type="text" id="gcashRefNumber" placeholder="GCash Reference Number" style="width:100%;padding:10px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+                    </div>
+                    <div id="cashInfo" style="display:none;background:#d1ecf1;border:1px solid #bee5eb;border-radius:8px;padding:10px;font-size:13px;color:#0c5460;">
+                        <i class="fas fa-info-circle"></i> Staff will come to your room to collect payment.
+                    </div>
+                    <div id="paymentError" style="color:#e74c3c;font-size:13px;margin-top:6px;display:none;"></div>
                 </div>
             </div>
             <div class="modal-actions">
@@ -710,26 +746,58 @@ $stmt->close();
                 </div>
             `).join('');
 
+            document.getElementById('extendPaymentSection').style.display = 'none';
+            document.getElementById('extendGcashFields').style.display = 'none';
+            document.getElementById('extendCashInfo').style.display = 'none';
+            document.getElementById('extendPaymentError').style.display = 'none';
+            selectedExtendPayment = null;
             document.getElementById('extendModal').classList.add('active');
         }
 
         function closeExtendModal() {
             document.getElementById('extendModal').classList.remove('active');
-            document.querySelectorAll('.extend-option').forEach(o => o.classList.remove('selected'));
+            document.querySelectorAll('#extendOptions .extend-option').forEach(o => o.classList.remove('selected'));
+            document.getElementById('extendPayGcashBtn').classList.remove('selected');
+            document.getElementById('extendPayCashBtn').classList.remove('selected');
             document.getElementById('extendConfirmBtn').disabled = true;
+            selectedExtend = null;
+            selectedExtendPayment = null;
         }
 
         let selectedExtend = null;
+        let selectedExtendPayment = null;
         function selectExtend(el) {
-            document.querySelectorAll('.extend-option').forEach(o => o.classList.remove('selected'));
+            document.querySelectorAll('#extendOptions .extend-option').forEach(o => o.classList.remove('selected'));
             el.classList.add('selected');
             selectedExtend = { minutes: el.dataset.minutes, price: el.dataset.price };
-            document.getElementById('extendConfirmBtn').disabled = false;
+            document.getElementById('extendPaymentSection').style.display = 'block';
+            document.getElementById('extendConfirmBtn').disabled = selectedExtendPayment === null;
+        }
+
+        function selectExtendPayment(method) {
+            selectedExtendPayment = method;
+            document.getElementById('extendPayGcashBtn').classList.toggle('selected', method === 'GCASH');
+            document.getElementById('extendPayCashBtn').classList.toggle('selected', method === 'CASH');
+            document.getElementById('extendGcashFields').style.display = method === 'GCASH' ? 'block' : 'none';
+            document.getElementById('extendCashInfo').style.display = method === 'CASH' ? 'block' : 'none';
+            document.getElementById('extendPaymentError').style.display = 'none';
+            if (selectedExtend) document.getElementById('extendConfirmBtn').disabled = false;
         }
 
         async function confirmExtend() {
-            if (!selectedExtend) return;
+            if (!selectedExtend || !selectedExtendPayment) return;
             const btn = document.getElementById('extendConfirmBtn');
+
+            if (selectedExtendPayment === 'GCASH') {
+                const name = document.getElementById('extendGcashAccountName').value.trim();
+                const ref = document.getElementById('extendGcashRefNumber').value.trim();
+                if (!name || !ref) {
+                    document.getElementById('extendPaymentError').textContent = 'Please fill in GCash account name and reference number.';
+                    document.getElementById('extendPaymentError').style.display = 'block';
+                    return;
+                }
+            }
+
             btn.textContent = 'Processing...';
             btn.disabled = true;
 
@@ -737,12 +805,17 @@ $stmt->close();
                 const formData = new FormData();
                 formData.append('rental_id', rentalId);
                 formData.append('minutes', selectedExtend.minutes);
+                formData.append('payment_method', selectedExtendPayment);
+                if (selectedExtendPayment === 'GCASH') {
+                    formData.append('gcash_account_name', document.getElementById('extendGcashAccountName').value.trim());
+                    formData.append('gcash_reference_number', document.getElementById('extendGcashRefNumber').value.trim());
+                }
 
-                const res = await fetch('../api/rooms/extend_time.php', { method: 'POST', body: formData });
+                const res = await fetch('../api/rooms/extend_with_payment.php', { method: 'POST', body: formData });
                 const data = await res.json();
 
                 if (data.success) {
-                    alert('Time extended successfully!');
+                    alert(data.message || 'Time extended successfully!');
                     location.reload();
                 } else {
                     alert('Error: ' + (data.error || 'Unknown error'));
@@ -757,6 +830,7 @@ $stmt->close();
         }
 
         // Confirm Order Modal
+        let selectedPaymentMethod = null;
         function openConfirmModal() {
             const summary = document.getElementById('orderSummary');
             let html = '', total = 0;
@@ -770,46 +844,46 @@ $stmt->close();
 
             summary.innerHTML = html;
             document.getElementById('orderTotalValue').textContent = total.toFixed(2);
-            const amtInput = document.getElementById('amountTendered');
-            amtInput.value = '';
-            amtInput.min = total.toFixed(2);
-            document.getElementById('changeDisplay').style.display = 'none';
-            document.getElementById('amountError').style.display = 'none';
-            amtInput.oninput = function() {
-                const amt = parseFloat(this.value) || 0;
-                const changeEl = document.getElementById('changeDisplay');
-                const errEl = document.getElementById('amountError');
-                if (amt > 0 && amt < total) {
-                    errEl.textContent = 'Amount is less than the total. Please enter at least P' + total.toFixed(2);
-                    errEl.style.display = 'block';
-                    changeEl.style.display = 'none';
-                } else if (amt >= total) {
-                    errEl.style.display = 'none';
-                    const change = amt - total;
-                    changeEl.innerHTML = '<strong style="color:#27ae60">Change: P' + change.toFixed(2) + '</strong>';
-                    changeEl.style.display = 'block';
-                } else {
-                    errEl.style.display = 'none';
-                    changeEl.style.display = 'none';
-                }
-            };
+            document.getElementById('gcashFields').style.display = 'none';
+            document.getElementById('cashInfo').style.display = 'none';
+            document.getElementById('paymentError').style.display = 'none';
+            document.getElementById('payGcashBtn').classList.remove('selected');
+            document.getElementById('payCashBtn').classList.remove('selected');
+            selectedPaymentMethod = null;
             document.getElementById('confirmModal').classList.add('active');
+        }
+
+        function selectPaymentMethod(method) {
+            selectedPaymentMethod = method;
+            document.getElementById('payGcashBtn').classList.toggle('selected', method === 'GCASH');
+            document.getElementById('payCashBtn').classList.toggle('selected', method === 'CASH');
+            document.getElementById('gcashFields').style.display = method === 'GCASH' ? 'block' : 'none';
+            document.getElementById('cashInfo').style.display = method === 'CASH' ? 'block' : 'none';
+            document.getElementById('paymentError').style.display = 'none';
         }
 
         function closeConfirmModal() {
             document.getElementById('confirmModal').classList.remove('active');
+            selectedPaymentMethod = null;
         }
 
         async function confirmOrder() {
             const btn = event.target;
-            const total = parseFloat(document.getElementById('orderTotalValue').textContent);
-            const amtInput = document.getElementById('amountTendered');
-            const amountTendered = parseFloat(amtInput.value);
 
-            if (!amtInput.value || isNaN(amountTendered) || amountTendered < total) {
-                document.getElementById('amountError').textContent = 'Please enter a valid amount of at least P' + total.toFixed(2);
-                document.getElementById('amountError').style.display = 'block';
+            if (!selectedPaymentMethod) {
+                document.getElementById('paymentError').textContent = 'Please select a payment method.';
+                document.getElementById('paymentError').style.display = 'block';
                 return;
+            }
+
+            if (selectedPaymentMethod === 'GCASH') {
+                const name = document.getElementById('gcashAccountName').value.trim();
+                const ref = document.getElementById('gcashRefNumber').value.trim();
+                if (!name || !ref) {
+                    document.getElementById('paymentError').textContent = 'Please fill in GCash account name and reference number.';
+                    document.getElementById('paymentError').style.display = 'block';
+                    return;
+                }
             }
 
             btn.textContent = 'Placing...';
@@ -824,14 +898,17 @@ $stmt->close();
                 const formData = new FormData();
                 formData.append('room_id', roomId);
                 formData.append('items', JSON.stringify(items));
-                formData.append('amount_tendered', amountTendered.toFixed(2));
+                formData.append('payment_method', selectedPaymentMethod);
+                if (selectedPaymentMethod === 'GCASH') {
+                    formData.append('gcash_account_name', document.getElementById('gcashAccountName').value.trim());
+                    formData.append('gcash_reference_number', document.getElementById('gcashRefNumber').value.trim());
+                }
 
-                const res = await fetch('../api/orders/add_order.php', { method: 'POST', body: formData });
+                const res = await fetch('../api/orders/submit_customer_payment.php', { method: 'POST', body: formData });
                 const data = await res.json();
 
                 if (data.success) {
-                    const change = data.change_amount !== null ? parseFloat(data.change_amount).toFixed(2) : '0.00';
-                    alert('Order placed successfully!\nTotal: P' + parseFloat(data.order_total).toFixed(2) + '\nYour change: P' + change);
+                    alert(data.message || 'Order placed successfully!');
                     cart = {};
                     updateCartDisplay();
                     closeConfirmModal();

@@ -81,8 +81,9 @@ try {
 
     $mysqli->commit();
 
-    // Generate QR code URL
-    $qr_url = 'https://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . '/qr_login.php?token=' . $qr_token;
+    // Generate QR code URL pointing to the actual qr_login endpoint
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $qr_url = $scheme . '://' . $_SERVER['HTTP_HOST'] . '/api/rooms/qr_login.php?token=' . $qr_token;
 
     echo json_encode([
         'success'=>true,
