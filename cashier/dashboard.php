@@ -354,6 +354,27 @@ while ($row = $roomsResult->fetch_assoc()) {
         /* Pulse animation for NEW orders */
         @keyframes pulse-badge { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
         .status-NEW { animation: pulse-badge 1.5s ease-in-out infinite; }
+        /* Pending Transactions */
+        .tx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; }
+        .tx-card { background: #f8f9fa; border-radius: 8px; padding: 1rem; border-left: 4px solid #f5c542; }
+        .tx-card.gcash { border-left-color: #007bff; }
+        .tx-card.cash  { border-left-color: #28a745; }
+        .tx-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .tx-room { font-weight: 700; font-size: 0.95rem; }
+        .tx-badge { padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+        .tx-badge.gcash-badge { background: #cce5ff; color: #004085; }
+        .tx-badge.cash-badge  { background: #d4edda; color: #155724; }
+        .tx-detail { font-size: 0.8rem; color: #6c757d; margin-bottom: 0.5rem; }
+        .tx-gcash-info { font-size: 0.8rem; background: #e9f2ff; padding: 0.4rem 0.6rem; border-radius: 6px; margin-bottom: 0.5rem; }
+        .tx-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+        .btn-tx { padding: 0.35rem 0.8rem; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+        .btn-approve  { background: #28a745; color: white; }
+        .btn-approve:hover  { background: #218838; }
+        .btn-reject   { background: #dc3545; color: white; }
+        .btn-reject:hover   { background: #c82333; }
+        .btn-collect  { background: #17a2b8; color: white; }
+        .btn-collect:hover  { background: #138496; }
+        .tx-notes-input { width: 100%; margin-top: 0.5rem; padding: 0.35rem 0.5rem; border: 1px solid #dee2e6; border-radius: 4px; font-size: 0.75rem; }
     </style>    <script>
         function toggleMobileNav() {
             const nav = document.getElementById('headerNav');
@@ -509,10 +530,39 @@ while ($row = $roomsResult->fetch_assoc()) {
                 </div>
             </div>
         </div>
+
+        <!-- Pending Room Payments Panel (full width below) -->
+        <div class="panel" style="grid-column:1/-1;">
+            <div class="panel-header">
+                <i class="fas fa-credit-card"></i> Pending Room Payments
+                <span style="margin-left:auto;font-size:0.75rem;font-weight:400;color:#6c757d;">Auto-refreshes every 10s</span>
+            </div>
+            <div class="panel-body" id="pendingTxPanel">
+                <div class="empty-state"><i class="fas fa-check-circle"></i><p>No pending payments</p></div>
+            </div>
+        </div>
+    </div>
     </main>
 
     <!-- Toast Container -->
     <div id="toast-container"></div>
+
+    <!-- QR Code Modal (shown after rental start) -->
+    <div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1100;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:white;border-radius:16px;padding:2rem;max-width:400px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <h3 style="font-size:1.25rem;margin-bottom:0.25rem;"><i class="fas fa-qrcode" style="color:#f5c542;"></i> Room Access QR Code</h3>
+            <p style="color:#6c757d;font-size:0.875rem;margin-bottom:1.25rem;">Room <strong id="qrRoomNumber"></strong> — Give this to the customer</p>
+            <img id="qrImage" src="" alt="QR Code" style="width:220px;height:220px;border:4px solid #f5c542;border-radius:12px;margin-bottom:1.25rem;">
+            <div style="background:#fff9e6;border:2px solid #f5c542;border-radius:10px;padding:1rem;margin-bottom:1.25rem;">
+                <div style="font-size:0.8rem;color:#856404;margin-bottom:0.4rem;font-weight:600;">OTP CODE</div>
+                <div id="qrOtpCode" style="font-size:2.5rem;font-weight:900;letter-spacing:0.4rem;color:#2c2c2c;font-family:monospace;"></div>
+            </div>
+            <div style="display:flex;gap:0.75rem;">
+                <button onclick="window.print()" style="flex:1;padding:0.6rem;border:1px solid #dee2e6;border-radius:6px;background:white;cursor:pointer;font-size:0.875rem;"><i class="fas fa-print"></i> Print</button>
+                <button onclick="closeQrModal()" style="flex:1;padding:0.6rem;border:none;border-radius:6px;background:#f5c542;cursor:pointer;font-size:0.875rem;font-weight:600;"><i class="fas fa-check"></i> Done</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Start Rental Modal -->
     <div id="startRentalModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;padding:20px;">
@@ -626,8 +676,7 @@ while ($row = $roomsResult->fetch_assoc()) {
                 const data = await res.json();
                 if (data.success) {
                     closeStartRentalModal();
-                    showToast('Rental started successfully ✓');
-                    location.reload();
+                    showQrModal(data);
                 } else {
                     alert('Error: ' + (data.error || 'Could not start rental'));
                     btn.textContent = 'Start Rental';
@@ -640,12 +689,101 @@ while ($row = $roomsResult->fetch_assoc()) {
             }
         }
 
+        function showQrModal(data) {
+            const qrSize = 250;
+            const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(data.qr_url)}`;
+            const modal = document.getElementById('qrModal');
+            document.getElementById('qrRoomNumber').textContent = data.room_number;
+            document.getElementById('qrOtpCode').textContent = data.otp_code;
+            document.getElementById('qrImage').src = qrImgUrl;
+            modal.style.display = 'flex';
+        }
+
+        function closeQrModal() {
+            document.getElementById('qrModal').style.display = 'none';
+            showToast('Rental started successfully ✓');
+            location.reload();
+        }
+
         // Show toast for POST action feedback
         <?php if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['toast'])): ?>
         document.addEventListener('DOMContentLoaded', () => {
             showToast('<?= htmlspecialchars($_GET['toast']) ?> ✓');
         });
         <?php endif; ?>
+
+        // Pending Room Transactions Panel
+        function buildPendingTxHtml(transactions) {
+            if (!transactions || transactions.length === 0) {
+                return '<div class="empty-state"><i class="fas fa-check-circle"></i><p>No pending payments</p></div>';
+            }
+            const html = '<div class="tx-grid">' + transactions.map(tx => {
+                const isGcash = tx.payment_method === 'GCASH';
+                const typeLabel = tx.transaction_type === 'ORDER' ? '<i class="fas fa-utensils"></i> Order' : '<i class="fas fa-clock"></i> Extension';
+                const gcashInfo = isGcash ? `<div class="tx-gcash-info"><i class="fas fa-mobile-alt"></i> <strong>${escHtml(tx.gcash_account_name||'')}</strong> &nbsp;|&nbsp; Ref: ${escHtml(tx.gcash_reference_number||'')}</div>` : '';
+                const actions = isGcash
+                    ? `<button class="btn-tx btn-approve" onclick="updateTx(${tx.transaction_id},'approve',this)"><i class="fas fa-check"></i> Approve</button>
+                       <button class="btn-tx btn-reject"  onclick="updateTx(${tx.transaction_id},'reject',this)"><i class="fas fa-times"></i> Reject</button>`
+                    : `<button class="btn-tx btn-collect" onclick="updateTx(${tx.transaction_id},'mark_collected',this)"><i class="fas fa-hand-holding-usd"></i> Mark Collected</button>`;
+                return `<div class="tx-card ${isGcash ? 'gcash' : 'cash'}">
+                    <div class="tx-top">
+                        <span class="tx-room"><i class="fas fa-door-open"></i> Room ${tx.room_number}</span>
+                        <span class="tx-badge ${isGcash ? 'gcash-badge' : 'cash-badge'}">${tx.payment_method}</span>
+                    </div>
+                    <div class="tx-detail">${typeLabel} &nbsp;•&nbsp; <strong>₱${parseFloat(tx.amount).toFixed(2)}</strong></div>
+                    ${gcashInfo}
+                    <input class="tx-notes-input" type="text" id="notes_${tx.transaction_id}" placeholder="Cashier notes (optional)">
+                    <div class="tx-actions" style="margin-top:0.4rem;">${actions}</div>
+                </div>`;
+            }).join('') + '</div>';
+            return html;
+        }
+
+        function escHtml(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        async function updateTx(txId, action, btn) {
+            btn.disabled = true;
+            const origText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const notes = document.getElementById('notes_' + txId);
+            const fd = new FormData();
+            fd.append('transaction_id', txId);
+            fd.append('action', action);
+            fd.append('cashier_notes', notes ? notes.value : '');
+            try {
+                const res = await fetch('../api/cashier/update_transaction.php', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Transaction updated: ' + data.new_status);
+                    refreshPendingTx();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                    btn.disabled = false;
+                    btn.innerHTML = origText;
+                }
+            } catch (err) {
+                alert('Network error: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = origText;
+            }
+        }
+
+        function refreshPendingTx() {
+            fetch('../api/cashier/get_pending_transactions.php')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.transactions !== undefined) {
+                        const panel = document.getElementById('pendingTxPanel');
+                        if (panel) panel.innerHTML = buildPendingTxHtml(data.transactions);
+                    }
+                })
+                .catch(() => {});
+        }
+
+        refreshPendingTx();
+        setInterval(refreshPendingTx, 10000);
     </script>
 </body>
 </html>
