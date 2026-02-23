@@ -534,6 +534,36 @@ while ($row = $roomsResult->fetch_assoc()) {
         </div>
     </div>
 
+    <!-- QR Code Modal (shown after rental starts) -->
+    <div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1100;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:white;border-radius:16px;padding:2rem;max-width:420px;width:100%;text-align:center;">
+            <h3 style="margin-bottom:0.5rem;font-size:1.25rem;color:#212529;"><i class="fas fa-qrcode" style="color:#f5c542;"></i> Rental Started!</h3>
+            <p style="color:#6c757d;font-size:0.875rem;margin-bottom:1.25rem;">Room <strong id="qrRoomNumber"></strong> — Give this QR code to the customer</p>
+            <img id="qrCodeImg" src="" alt="QR Code" style="width:260px;height:260px;border:2px solid #dee2e6;border-radius:8px;margin-bottom:1rem;">
+            <div style="background:#f8f9fa;border-radius:8px;padding:0.75rem;margin-bottom:1rem;">
+                <div style="font-size:0.75rem;color:#6c757d;margin-bottom:0.25rem;">Manual OTP (fallback)</div>
+                <div id="qrOtpCode" style="font-size:2rem;font-weight:700;letter-spacing:0.4rem;font-family:monospace;color:#212529;"></div>
+            </div>
+            <div style="font-size:0.8rem;color:#6c757d;margin-bottom:1.25rem;">
+                <i class="fas fa-info-circle"></i> Customer scans QR code to access their room dashboard
+            </div>
+            <button onclick="closeQrModal()" style="width:100%;padding:0.75rem;border:none;border-radius:8px;background:#f5c542;cursor:pointer;font-size:1rem;font-weight:600;color:#2c2c2c;">
+                <i class="fas fa-check"></i> Done
+            </button>
+        </div>
+    </div>
+
+    <!-- Pending Transactions Panel -->
+    <div id="pendingTxPanel" style="display:none;position:fixed;bottom:1.5rem;left:1.5rem;background:white;border-radius:12px;border:1px solid #dee2e6;box-shadow:0 4px 20px rgba(0,0,0,0.15);z-index:900;width:320px;max-height:480px;overflow:hidden;flex-direction:column;">
+        <div style="padding:0.75rem 1rem;background:#f8f9fa;border-bottom:1px solid #dee2e6;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleTxPanel()">
+            <span style="font-weight:600;font-size:0.875rem;"><i class="fas fa-bell" style="color:#f5c542;"></i> Pending Payments <span id="pendingTxBadge" style="background:#dc3545;color:white;border-radius:50%;padding:0.1rem 0.4rem;font-size:0.7rem;margin-left:0.25rem;display:none;">0</span></span>
+            <i class="fas fa-chevron-up" id="txPanelChevron"></i>
+        </div>
+        <div id="pendingTxBody" style="overflow-y:auto;padding:0.5rem;flex:1;">
+            <div style="text-align:center;padding:1rem;color:#6c757d;font-size:0.875rem;">Loading...</div>
+        </div>
+    </div>
+
     <script>
         // Toast notification helper
         function showToast(message, type = 'success') {
@@ -626,7 +656,7 @@ while ($row = $roomsResult->fetch_assoc()) {
                 const data = await res.json();
                 if (data.success) {
                     closeStartRentalModal();
-                    showToast('Rental started successfully ✓');
+                    showQrModal(data);
                     location.reload();
                 } else {
                     alert('Error: ' + (data.error || 'Could not start rental'));
@@ -639,6 +669,99 @@ while ($row = $roomsResult->fetch_assoc()) {
                 btn.disabled = false;
             }
         }
+
+        function showQrModal(data) {
+            const qrUrl = data.qr_url;
+            const qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrUrl);
+            document.getElementById('qrRoomNumber').textContent = data.room_number;
+            document.getElementById('qrCodeImg').src = qrImgUrl;
+            document.getElementById('qrOtpCode').textContent = data.otp_code;
+            document.getElementById('qrModal').style.display = 'flex';
+        }
+
+        function closeQrModal() {
+            document.getElementById('qrModal').style.display = 'none';
+        }
+
+        // Pending transactions panel
+        let txPanelOpen = true;
+        function toggleTxPanel() {
+            txPanelOpen = !txPanelOpen;
+            document.getElementById('pendingTxBody').style.display = txPanelOpen ? 'block' : 'none';
+            document.getElementById('txPanelChevron').className = txPanelOpen ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+        }
+
+        function buildTxHtml(transactions) {
+            if (!transactions || transactions.length === 0) {
+                return '<div style="text-align:center;padding:1rem;color:#6c757d;font-size:0.8rem;"><i class="fas fa-check-circle" style="color:#28a745;"></i> No pending payments</div>';
+            }
+            return transactions.map(tx => {
+                const isGcash = tx.payment_method === 'GCASH';
+                const borderColor = isGcash ? '#ffc107' : '#17a2b8';
+                const bgColor = isGcash ? '#fffbf0' : '#f0fbfc';
+                const icon = isGcash ? 'fa-mobile-alt' : 'fa-money-bill-wave';
+                const statusLabel = isGcash ? 'GCash — Verify' : 'Cash — Collect';
+                const actionHtml = isGcash
+                    ? `<button onclick="updateTx(${tx.transaction_id},'approve')" style="flex:1;padding:0.3rem 0.5rem;border:none;border-radius:4px;background:#28a745;color:white;font-size:0.7rem;cursor:pointer;font-weight:600;">Approve</button>
+                       <button onclick="updateTx(${tx.transaction_id},'reject')" style="flex:1;padding:0.3rem 0.5rem;border:none;border-radius:4px;background:#dc3545;color:white;font-size:0.7rem;cursor:pointer;font-weight:600;">Reject</button>`
+                    : `<button onclick="updateTx(${tx.transaction_id},'collected')" style="flex:1;padding:0.3rem 0.5rem;border:none;border-radius:4px;background:#17a2b8;color:white;font-size:0.7rem;cursor:pointer;font-weight:600;">Mark Collected</button>`;
+                const gcashInfo = isGcash && tx.gcash_account_name
+                    ? `<div style="font-size:0.7rem;color:#6c757d;margin:0.25rem 0;">${tx.gcash_account_name} • Ref: ${tx.gcash_reference_number || 'N/A'}</div>` : '';
+                return `<div style="background:${bgColor};border-left:3px solid ${borderColor};border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+                        <span style="font-weight:700;font-size:0.8rem;"><i class="fas fa-door-open"></i> Room ${tx.room_number}</span>
+                        <span style="font-size:0.7rem;background:${borderColor};color:${isGcash?'#2c2c2c':'white'};border-radius:4px;padding:0.1rem 0.4rem;"><i class="fas ${icon}"></i> ${statusLabel}</span>
+                    </div>
+                    <div style="font-size:0.8rem;font-weight:600;">₱${parseFloat(tx.amount).toFixed(2)} — ${tx.transaction_type === 'ORDER' ? 'Order' : 'Time Extension'}</div>
+                    ${gcashInfo}
+                    <div style="display:flex;gap:0.35rem;margin-top:0.4rem;">${actionHtml}</div>
+                </div>`;
+            }).join('');
+        }
+
+        async function updateTx(transactionId, action) {
+            try {
+                const fd = new FormData();
+                fd.append('transaction_id', transactionId);
+                fd.append('action', action);
+                const res = await fetch('../api/transactions/update_transaction_status.php', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.success) {
+                    const actionLabels = {approve: 'approved', reject: 'rejected', collected: 'collected'};
+                    showToast('Transaction ' + (actionLabels[action] || action) + ' ✓');
+                    refreshPendingTx();
+                } else {
+                    alert('Error: ' + (data.error || 'Could not update transaction'));
+                }
+            } catch (err) {
+                alert('Network error: ' + err.message);
+            }
+        }
+
+        async function refreshPendingTx() {
+            try {
+                const res = await fetch('../api/transactions/get_pending_transactions.php');
+                const data = await res.json();
+                if (data.success) {
+                    const panel = document.getElementById('pendingTxPanel');
+                    const body = document.getElementById('pendingTxBody');
+                    const badge = document.getElementById('pendingTxBadge');
+                    const count = data.total_pending || 0;
+                    body.innerHTML = buildTxHtml(data.transactions);
+                    if (count > 0) {
+                        panel.style.display = 'flex';
+                        badge.style.display = 'inline';
+                        badge.textContent = count;
+                    } else {
+                        badge.style.display = 'none';
+                        panel.style.display = 'flex';
+                        body.innerHTML = buildTxHtml([]);
+                    }
+                }
+            } catch (e) {}
+        }
+        refreshPendingTx();
+        setInterval(refreshPendingTx, 15000);
 
         // Show toast for POST action feedback
         <?php if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['toast'])): ?>
